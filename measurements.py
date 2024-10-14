@@ -118,7 +118,7 @@ pixel_base = 10
 
 # maximum field of view from center to farthest edge
 # should be measured in unit_suffix 
-cal_range = 72
+cal_range = 132
 
 # initial calibration values table {pixels:scale}
 # this is based on the frame size and the cal_range
@@ -568,8 +568,6 @@ while 1:
 
         # small crosshairs
         draw.crosshairs(frame0,5,weight=2,color='green')    
-
-        # mouse cursor lines
         draw.vline(frame0,mouse_raw[0],weight=1,color='green')
         draw.hline(frame0,mouse_raw[1],weight=1,color='green')
        
