@@ -489,8 +489,11 @@ while 1:
     #-------------------------------
     # auto mode
     #-------------------------------
+    #-------------------------------
+    # auto mode with defect detection
+    #-------------------------------
     elif key_flags['auto']:
-        
+    
         mouse_mark = None
 
         # auto text data
@@ -500,66 +503,100 @@ while 1:
         text.append(f'MIN PERCENT: {auto_percent:.2f}')
         text.append(f'THRESHOLD: {auto_threshold}')
         text.append(f'GAUSS BLUR: {auto_blur}')
-        
+    
         # gray frame
-        frame1 = cv2.cvtColor(frame0,cv2.COLOR_BGR2GRAY)
+        frame1 = cv2.cvtColor(frame0, cv2.COLOR_BGR2GRAY)
 
         # blur frame
-        frame1 = cv2.GaussianBlur(frame1,(auto_blur,auto_blur),0)
+        frame1 = cv2.GaussianBlur(frame1, (auto_blur, auto_blur), 0)
 
-        # threshold frame n out of 255 (85 = 33%)
-        frame1 = cv2.threshold(frame1,auto_threshold,255,cv2.THRESH_BINARY)[1]
+        # threshold frame
+        frame1 = cv2.threshold(frame1, auto_threshold, 255, cv2.THRESH_BINARY)[1]
 
         # invert
         frame1 = ~frame1
 
         # find contours on thresholded image
-        contours,nada = cv2.findContours(frame1,cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_SIMPLE)
-        
-        # small crosshairs (after getting frame1)
-        draw.crosshairs(frame0,5,weight=2,color='green')    
+        contours, _ = cv2.findContours(frame1, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
+        # small crosshairs (after getting frame1)
+        draw.crosshairs(frame0, 5, weight=2, color='green')    
+
         # loop over the contours
         for c in contours:
 
             # contour data (from top left)
-            x1,y1,w,h = cv2.boundingRect(c)
-            x2,y2 = x1+w,y1+h
-            x3,y3 = x1+(w/2),y1+(h/2)
+            x1, y1, w, h = cv2.boundingRect(c)
+            x2, y2 = x1 + w, y1 + h
+            x3, y3 = x1 + (w / 2), y1 + (h / 2)
 
             # percent area
-            percent = 100*w*h/area
-            
+            percent = 100 * w * h / area
+        
             # if the contour is too small, ignore it
             if percent < auto_percent:
-                    continue
+                continue
 
-            # if the contour is too large, ignore it
+        # if the contour is too large, ignore it
             elif percent > 60:
-                    continue
+                continue
 
             # convert to center, then distance
-            x1c,y1c = conv(x1-(cx),y1-(cy))
-            x2c,y2c = conv(x2-(cx),y2-(cy))
-            xlen = abs(x1c-x2c)
-            ylen = abs(y1c-y2c)
+            x1c, y1c = conv(x1 - cx, y1 - cy)
+            x2c, y2c = conv(x2 - cx, y2 - cy)
+            xlen = abs(x1c - x2c)
+            ylen = abs(y1c - y2c)
+
+            # Average length if the object is close to square shape
             alen = 0
-            if max(xlen,ylen) > 0 and min(xlen,ylen)/max(xlen,ylen) >= 0.95:
-                alen = (xlen+ylen)/2              
-            carea = xlen*ylen
+            if max(xlen, ylen) > 0 and min(xlen, ylen) / max(xlen, ylen) >= 0.95:
+                alen = (xlen + ylen) / 2              
+        
+            # Calculate area of the contour in real units
+            carea = xlen * ylen
 
-            # plot
-            draw.rect(frame0,x1,y1,x2,y2,weight=2,color='red')
+            # Plot the bounding rectangle on the original frame
+            draw.rect(frame0, x1, y1, x2, y2, weight=2, color='red')
 
-            # add dimensions
-            draw.add_text(frame0,f'{xlen:.2f}',x1-((x1-x2)/2),min(y1,y2)-8,center=True,color='red')
-            draw.add_text(frame0,f'Area: {carea:.2f}',x3,y2+8,center=True,top=True,color='red')
+            # Add dimension labels on the frame
+            draw.add_text(frame0, f'{xlen:.2f}', x1 - ((x1 - x2) / 2), min(y1, y2) - 8, center=True, color='red')  # x-dimension
+            draw.add_text(frame0, f'Area: {carea:.2f}', x3, y2 + 8, center=True, top=True, color='red')  # Area of the object
+        
             if alen:
-                draw.add_text(frame0,f'Avg: {alen:.2f}',x3,y2+34,center=True,top=True,color='green')
-            if x1 < width-x2:
-                draw.add_text(frame0,f'{ylen:.2f}',x2+4,(y1+y2)/2,middle=True,color='red')
+                draw.add_text(frame0, f'Avg: {alen:.2f}', x3, y2 + 34, center=True, top=True, color='green')  # Average length
+        
+            # Display the y-dimension based on position
+            if x1 < width - x2:
+                draw.add_text(frame0, f'{ylen:.2f}', x2 + 4, (y1 + y2) / 2, middle=True, color='red')
             else:
-                draw.add_text(frame0,f'{ylen:.2f}',x1-4,(y1+y2)/2,middle=True,right=True,color='red')
+                draw.add_text(frame0, f'{ylen:.2f}', x1 - 4, (y1 + y2) / 2, middle=True, right=True, color='red')
+
+            #----------------------------------------
+            # Defect Identification
+            #----------------------------------------
+
+            # Check for size-based defects (too small or too large)
+            if percent < 5 or percent > 50:
+                defect_text = "Size Defect"
+                draw.add_text(frame0, f'{defect_text}', x3, y2 + 50, center=True, top=True, color='yellow')
+                draw.rect(frame0, x1, y1, x2, y2, weight=3, color='yellow')  # Highlight with yellow border
+
+            # Check for aspect ratio defects (deviation from expected shape)
+            aspect_ratio = w / h
+            if aspect_ratio < 0.5 or aspect_ratio > 2.0:
+                defect_text = "Shape Defect"
+                draw.add_text(frame0, f'{defect_text}', x3, y2 + 50, center=True, top=True, color='blue')
+                draw.rect(frame0, x1, y1, x2, y2, weight=3, color='blue')  # Highlight with blue border
+
+            # Check for irregular contour shapes (edge defects)
+            perimeter = cv2.arcLength(c, True)
+            area_contour = cv2.contourArea(c)
+            if area_contour != 0:
+                circularity = 4 * 3.14159 * (area_contour / (perimeter ** 2))
+                if circularity < 0.7:
+                    defect_text = "Irregular Contour"
+                    draw.add_text(frame0, f'{defect_text}', x3, y2 + 50, center=True, top=True, color='red')
+                    draw.rect(frame0, x1, y1, x2, y2, weight=3, color='red')  # Highlight with red border
 
     #-------------------------------
     # dimension mode
